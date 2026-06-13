@@ -1,0 +1,15 @@
+{
+  "project_name": "test_project",
+
+  "project_path": ".",
+
+  "database": {
+    "type": "mock"
+  },
+
+  "paths": {
+    "jobs": "jobs",
+    "pilots": "pilots",
+    "processes": "processes"
+  }
+}
