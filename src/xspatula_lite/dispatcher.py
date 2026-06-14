@@ -5,13 +5,12 @@ from typing import Any
 
 from xspatula_lite.exceptions import DispatchError
 from xspatula_lite.models import ProcessStep
-from xspatula_lite.registry import ProcessRegistry
-
+from xspatula_lite.process_registry import ProcessRegistry
 Handler = Callable[[ProcessStep], None]
 
 
 class Dispatcher:
-    """Map process_id/process names to Python handlers."""
+    """Map process_id/process names to Python operations."""
 
     def __init__(
         self,

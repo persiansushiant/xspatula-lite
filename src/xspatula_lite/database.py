@@ -8,16 +8,21 @@ class DatabaseSession:
         self,
         config: dict[str, Any] | None = None,
         mock: bool | None = None,
-        verbose: bool = True,
+        verbose: int | bool = 1,
     ):
-
         self.config = config or {"type": "mock"}
         self.verbose = verbose
+
         self.connection = None
+
         self.executed_sql: list[str] = []
         self.executed = self.executed_sql
 
-        db_type = self.config.get("type") or self.config.get("engine")
+        db_type = (
+            self.config.get("type")
+            or self.config.get("engine")
+            or self.config.get("db_type")
+        )
 
         if mock is None:
             self.mock = db_type in (None, "mock")
@@ -29,10 +34,16 @@ class DatabaseSession:
             self._log("[mock-db] connect")
             return
 
-        db_type = self.config.get("type") or self.config.get("engine")
+        db_type = (
+            self.config.get("type")
+            or self.config.get("engine")
+            or self.config.get("db_type")
+        )
 
         if db_type not in ("postgres", "postgresql"):
-            raise ValueError(f"Unsupported database type: {db_type}")
+            raise ValueError(
+                f"Unsupported database type: {db_type}"
+            )
 
         try:
             import psycopg
@@ -60,7 +71,11 @@ class DatabaseSession:
 
         self._log("[postgres-db] connect")
 
-    def execute(self, sql: str, params: tuple[Any, ...] | None = None) -> None:
+    def execute(
+        self,
+        sql: str,
+        params: tuple[Any, ...] | None = None,
+    ) -> None:
         if self.mock:
             self.executed_sql.append(sql)
             self._log(f"[mock-sql] {sql}")
@@ -77,6 +92,29 @@ class DatabaseSession:
         self.connection.commit()
 
         self._log(f"[postgres-sql] {sql}")
+
+    def execute_many(
+        self,
+        sql: str,
+        rows: list[tuple[Any, ...]],
+    ) -> None:
+        if self.mock:
+            for row in rows:
+                self.executed_sql.append(sql)
+                self._log(f"[mock-sql] {sql} {row}")
+            return
+
+        if self.connection is None:
+            self.connect()
+
+        assert self.connection is not None
+
+        with self.connection.cursor() as cursor:
+            cursor.executemany(sql, rows)
+
+        self.connection.commit()
+
+        self._log(f"[postgres-sql-many] {sql}")
 
     def close(self) -> None:
         if self.connection is not None:

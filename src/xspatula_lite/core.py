@@ -6,7 +6,7 @@ from typing import Any
 from xspatula_lite.database import DatabaseSession
 from xspatula_lite.dispatcher import Dispatcher
 from xspatula_lite.exceptions import ConfigError
-from xspatula_lite.handlers.setup_handlers import SetupHandlers
+from xspatula_lite.operations.db_setup import SetupHandlers
 from xspatula_lite.jobs import JobLoader
 from xspatula_lite.models import Job, Scheme
 from xspatula_lite.pilot import PilotLoader
