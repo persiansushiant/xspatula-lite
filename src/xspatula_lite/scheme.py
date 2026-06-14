@@ -1,82 +1,107 @@
-from __future__ import annotations
-
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from xspatula_lite.models import Scheme
-from xspatula_lite.utils import read_json, resolve_path
+from xspatula_lite.utils import read_json
+
+
+@dataclass
+class Scheme:
+    raw: dict[str, Any]
+    scheme_path: Path
+    project_path: Path
+    jobs_path: Path
+    pilots_path: Path
+    processes_path: Path
+    database: dict[str, Any]
+    user_project: dict[str, Any]
+    defaults: dict[str, Any]
 
 
 class SchemeLoader:
-    """Load the top-level execution scheme.
-
-    Preferred project layout:
-
-        project/
-          schemes/local.json
-          jobs/*.json
-          pilots/*.txt
-          processes/<job>/*.json
-
-    Legacy Xspatula-style scheme files are still tolerated.
-    """
-
-    DEFAULT_PATHS = {
-        "jobs": "jobs",
-        "pilots": "pilots",
-        "processes": "processes",
-    }
-
     def load(self, path: str | Path) -> Scheme:
-        scheme_path = Path(path).expanduser().resolve()
+        scheme_path = Path(path).resolve()
         raw = read_json(scheme_path)
 
-        project_path_raw = raw.get("project_path", ".")
-        project_path = resolve_path(project_path_raw, base=scheme_path.parent)
+        scheme_dir = scheme_path.parent
 
-        paths = self._resolve_project_paths(raw, project_path)
+        project_path = (
+            scheme_dir
+            / raw.get("project_path", ".")
+        ).resolve()
+
+        paths = raw.get("paths", {})
+
+        jobs_path = (
+            project_path
+            / paths.get("jobs", "jobs")
+        ).resolve()
+
+        pilots_path = (
+            project_path
+            / paths.get("pilots", "pilots")
+        ).resolve()
+
+        processes_path = (
+            project_path
+            / paths.get("processes", "processes")
+        ).resolve()
+
+        database = (
+            raw.get("database")
+            or raw.get("postgresdb")
+            or {"type": "mock"}
+        )
+
         defaults = self._extract_defaults(raw)
-        database = raw.get("database") or raw.get("postgresdb") or {}
-        user_project = raw.get("user_project") or {}
 
         return Scheme(
             raw=raw,
-            path=scheme_path,
+            scheme_path=scheme_path,
             project_path=project_path,
-            paths=paths,
+            jobs_path=jobs_path,
+            pilots_path=pilots_path,
+            processes_path=processes_path,
             database=database,
-            user_project=user_project,
+            user_project=raw.get("user_project", {}),
             defaults=defaults,
         )
 
-    def _resolve_project_paths(self, raw: dict[str, Any], project_path: Path) -> dict[str, Path]:
-        configured = raw.get("paths") or {}
-        paths: dict[str, Path] = {}
-        for key, default_value in self.DEFAULT_PATHS.items():
-            value = configured.get(key, default_value)
-            paths[key] = resolve_path(value, base=project_path)
-        return paths
-
-    @staticmethod
-    def _extract_defaults(raw: dict[str, Any]) -> dict[str, Any]:
-        defaults: dict[str, Any] = {
+    def _extract_defaults(self, raw: dict[str, Any]) -> dict[str, Any]:
+        defaults = {
             "execute": True,
-            "verbose": 1,
+            "verbose": 0,
             "overwrite": False,
             "delete": False,
         }
 
-        # New cleaner style.
         if isinstance(raw.get("defaults"), dict):
             defaults.update(raw["defaults"])
 
-        # Legacy style from the previous Xspatula files.
         process_defaults = raw.get("process")
-        if isinstance(process_defaults, list) and process_defaults and isinstance(process_defaults[0], dict):
-            defaults.update(process_defaults[0])
+
+        if isinstance(process_defaults, list) and process_defaults:
+            first = process_defaults[0]
+
+            if isinstance(first, dict):
+                for key in [
+                    "execute",
+                    "verbose",
+                    "overwrite",
+                    "delete",
+                    "src_path",
+                ]:
+                    if key in first:
+                        defaults[key] = first[key]
+
         elif isinstance(process_defaults, dict):
-            # Only use scalar default-like values, not nested job configs.
-            for key in ("execute", "verbose", "overwrite", "delete"):
+            for key in [
+                "execute",
+                "verbose",
+                "overwrite",
+                "delete",
+                "src_path",
+            ]:
                 if key in process_defaults:
                     defaults[key] = process_defaults[key]
 
