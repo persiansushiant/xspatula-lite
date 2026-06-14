@@ -11,7 +11,9 @@ requires-python = ">=3.10"
 authors = [
     { name = "Kamran Hatami" }
 ]
-dependencies = []
+dependencies = [
+    "psycopg[binary]>=3.2"
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]

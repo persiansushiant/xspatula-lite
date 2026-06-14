@@ -4,37 +4,86 @@ from typing import Any
 
 
 class DatabaseSession:
-    """Small DB facade with mock-first behavior.
+    def __init__(
+        self,
+        config: dict[str, Any] | None = None,
+        mock: bool | None = None,
+        verbose: bool = True,
+    ):
 
-    Later, a psycopg2 connection can be injected without changing loaders,
-    dispatcher, pilots, or handlers.
-    """
-
-    def __init__(self, config: dict[str, Any] | None = None, *, mock: bool = True, verbose: int = 1):
-        self.config = config or {}
-        self.mock = mock
+        self.config = config or {"type": "mock"}
         self.verbose = verbose
         self.connection = None
-        self.executed: list[str] = []
+        self.executed_sql: list[str] = []
+        self.executed = self.executed_sql
+
+        db_type = self.config.get("type") or self.config.get("engine")
+
+        if mock is None:
+            self.mock = db_type in (None, "mock")
+        else:
+            self.mock = mock
 
     def connect(self) -> None:
         if self.mock:
-            self.log("[mock-db] connect", level=1)
+            self._log("[mock-db] connect")
             return
-        raise NotImplementedError("Real PostgreSQL connection is not implemented yet. Use mock=True.")
 
-    def execute(self, sql: str, *, commit: bool = True) -> None:
-        self.executed.append(sql)
+        db_type = self.config.get("type") or self.config.get("engine")
+
+        if db_type not in ("postgres", "postgresql"):
+            raise ValueError(f"Unsupported database type: {db_type}")
+
+        try:
+            import psycopg
+        except ImportError as error:
+            raise ImportError(
+                "PostgreSQL support requires psycopg. "
+                "Install with: pip install psycopg[binary]"
+            ) from error
+
+        self.connection = psycopg.connect(
+            host=self.config.get("host", "localhost"),
+            port=self.config.get("port", 5432),
+            dbname=(
+                self.config.get("db")
+                or self.config.get("database")
+                or self.config.get("name")
+            ),
+            user=(
+                self.config.get("user")
+                or self.config.get("user_name")
+                or self.config.get("username")
+            ),
+            password=self.config.get("password", ""),
+        )
+
+        self._log("[postgres-db] connect")
+
+    def execute(self, sql: str, params: tuple[Any, ...] | None = None) -> None:
         if self.mock:
-            self.log(f"[mock-sql] {sql}", level=1)
+            self.executed_sql.append(sql)
+            self._log(f"[mock-sql] {sql}")
             return
-        raise NotImplementedError("Real SQL execution is not implemented yet. Use mock=True.")
+
+        if self.connection is None:
+            self.connect()
+
+        assert self.connection is not None
+
+        with self.connection.cursor() as cursor:
+            cursor.execute(sql, params)
+
+        self.connection.commit()
+
+        self._log(f"[postgres-sql] {sql}")
 
     def close(self) -> None:
-        if self.mock:
-            self.log("[mock-db] close", level=2)
-            return
+        if self.connection is not None:
+            self.connection.close()
+            self.connection = None
+            self._log("[postgres-db] close")
 
-    def log(self, message: str, *, level: int = 1) -> None:
-        if self.verbose >= level:
+    def _log(self, message: str) -> None:
+        if self.verbose:
             print(message)
