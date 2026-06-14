@@ -14,9 +14,11 @@ authors = [
 dependencies = []
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=8.0"
-]
+dev = ["pytest>=8.0"]
+postgres = ["psycopg2-binary>=2.9"]
+
+[project.scripts]
+xspatula-lite = "xspatula_lite.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

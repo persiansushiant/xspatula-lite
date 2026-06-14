@@ -43,10 +43,7 @@ class Dispatcher:
 
         handler = self.handlers.get(effective.process_id)
         if handler is None:
-            if effective.process_id in {
-                "root_process", "process", "parameters", "parameter", "nodes", "permissions",
-                "add_root_process", "add_process", "process_parameter",
-            }:
+            if effective.process_id in self.registry.ENTITY_PROCESS_IDS or effective.process_id in {"nodes", "permissions"}:
                 handler = self.registry.register_from_step
             else:
                 raise DispatchError(f"No handler registered for process_id '{effective.process_id}'")
