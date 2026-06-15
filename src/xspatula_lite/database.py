@@ -52,7 +52,8 @@ class DatabaseSession:
                 "PostgreSQL support requires psycopg. "
                 "Install with: pip install psycopg[binary]"
             ) from error
-
+        if self.config.get("auto_create", False):
+            self.create_database_if_missing()
         self.connection = psycopg.connect(
             host=self.config.get("host", "localhost"),
             port=self.config.get("port", 5432),
