@@ -159,11 +159,39 @@ class ProcessRegistry:
         column_sql = ", ".join(columns)
         placeholder_sql = ", ".join(["%s"] * len(values))
 
-        sql = (
-            f"INSERT INTO {table} "
-            f"({column_sql}) "
-            f"VALUES ({placeholder_sql});"
-        )
+        if "id" in data:
+            update_columns = [
+                column
+                for column in columns
+                if column != "id"
+            ]
+
+            if update_columns:
+                update_sql = ", ".join(
+                    f"{column} = EXCLUDED.{column}"
+                    for column in update_columns
+                )
+
+                sql = (
+                    f"INSERT INTO {table} "
+                    f"({column_sql}) "
+                    f"VALUES ({placeholder_sql}) "
+                    f"ON CONFLICT (id) DO UPDATE SET "
+                    f"{update_sql};"
+                )
+            else:
+                sql = (
+                    f"INSERT INTO {table} "
+                    f"({column_sql}) "
+                    f"VALUES ({placeholder_sql}) "
+                    f"ON CONFLICT (id) DO NOTHING;"
+                )
+        else:
+            sql = (
+                f"INSERT INTO {table} "
+                f"({column_sql}) "
+                f"VALUES ({placeholder_sql});"
+            )
 
         self.db.execute(sql, tuple(values))
 
