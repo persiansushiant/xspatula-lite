@@ -116,6 +116,72 @@ class DatabaseSession:
 
         self._log(f"[postgres-sql-many] {sql}")
 
+    def create_database_if_missing(self) -> None:
+        if self.mock:
+            dbname = (
+                self.config.get("db")
+                or self.config.get("database")
+                or self.config.get("name")
+            )
+            self._log(f"[mock-db] CREATE DATABASE IF NOT EXISTS {dbname}")
+            return
+
+        dbname = (
+            self.config.get("db")
+            or self.config.get("database")
+            or self.config.get("name")
+        )
+
+        if not dbname:
+            raise ValueError("Database name is required")
+
+        try:
+            import psycopg
+            from psycopg import sql
+        except ImportError as error:
+            raise ImportError(
+                "PostgreSQL support requires psycopg. "
+                "Install with: pip install psycopg[binary]"
+            ) from error
+
+        admin_db = self.config.get("admin_db", "postgres")
+
+        conn = psycopg.connect(
+            host=self.config.get("host", "localhost"),
+            port=self.config.get("port", 5432),
+            dbname=admin_db,
+            user=(
+                self.config.get("user")
+                or self.config.get("user_name")
+                or self.config.get("username")
+            ),
+            password=self.config.get("password", ""),
+            autocommit=True,
+        )
+
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "SELECT 1 FROM pg_database WHERE datname = %s;",
+                    (dbname,),
+                )
+
+                exists = cursor.fetchone() is not None
+
+                if exists:
+                    self._log(f"[postgres-db] database exists: {dbname}")
+                    return
+
+                cursor.execute(
+                    sql.SQL("CREATE DATABASE {};").format(
+                        sql.Identifier(dbname)
+                    )
+                )
+
+                self._log(f"[postgres-db] created database: {dbname}")
+
+        finally:
+            conn.close()
     def close(self) -> None:
         if self.connection is not None:
             self.connection.close()
